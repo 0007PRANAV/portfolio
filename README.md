@@ -1,3 +1,2 @@
 # portfolio
-this is my portfolio.
-https://github.com/pages-themes/time-machine.git
+Hi There This Is My Portfolio!!!
