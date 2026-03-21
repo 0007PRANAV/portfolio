@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glass Bridge</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0a0a0f; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; height:100vh; }
+#ui { position:fixed; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:linear-gradient(to bottom,rgba(0,0,0,0.9),transparent); z-index:10; }
+.stat { text-align:center; }
+.stat-label { font-size:9px; letter-spacing:2px; color:#555; text-transform:uppercase; }
+.stat-value { font-size:18px; font-weight:700; color:#fff; }
+#step-wrap { display:flex; align-items:center; gap:5px; }
+#secret-btn { background:rgba(0,0,0,0.01); border:1px solid #1a1a1a; color:#1a1a1a; width:8px; height:8px; border-radius:2px; cursor:pointer; font-size:1px; padding:0; flex-shrink:0; }
+#controls { position:fixed; bottom:0; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:8px; padding:12px 16px 16px; background:linear-gradient(to top,rgba(0,0,0,0.92),transparent); z-index:10; }
+.ctrl-btn { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); color:#aaa; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:11px; letter-spacing:1px; transition:all 0.2s; white-space:nowrap; }
+.ctrl-btn:hover:not(:disabled) { background:rgba(255,255,255,0.13); color:#fff; }
+.ctrl-btn:disabled { opacity:0.28; cursor:not-allowed; }
+.ctrl-btn.used { opacity:0.22; cursor:not-allowed; text-decoration:line-through; }
+#hint-box { position:fixed; bottom:68px; left:50%; transform:translateX(-50%); background:rgba(255,220,50,0.1); border:1px solid rgba(255,220,50,0.4); border-radius:10px; padding:8px 18px; font-size:11px; color:#ffd93d; letter-spacing:1px; display:none; z-index:11; text-align:center; white-space:nowrap; }
+#shop-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.87); display:none; align-items:center; justify-content:center; z-index:50; }
+#shop-overlay.open { display:flex; }
+#shop-panel { background:#111116; border:1px solid #2a2a35; border-radius:16px; padding:26px; width:450px; max-width:92vw; }
+#shop-panel h2 { font-size:17px; letter-spacing:3px; color:#e05f5f; margin-bottom:4px; }
+.shop-sub { font-size:10px; color:#444; margin-bottom:18px; letter-spacing:1px; }
+.shop-item { display:flex; justify-content:space-between; align-items:center; padding:11px 13px; border:1px solid #1e1e2a; border-radius:10px; margin-bottom:8px; }
+.shop-item-info h3 { font-size:12px; color:#ddd; margin-bottom:2px; }
+.shop-item-info p { font-size:10px; color:#555; }
+.shop-price { font-size:12px; color:#ffd93d; font-weight:600; margin-right:9px; }
+.buy-btn { background:rgba(224,95,95,0.17); border:1px solid #e05f5f; color:#e05f5f; padding:5px 12px; border-radius:7px; cursor:pointer; font-size:10px; letter-spacing:1px; transition:all 0.2s; }
+.buy-btn:hover:not(:disabled) { background:rgba(224,95,95,0.32); }
+.buy-btn:disabled { opacity:0.28; cursor:not-allowed; }
+.close-btn { display:block; margin-top:14px; width:100%; padding:8px; background:transparent; border:1px solid #222; color:#444; border-radius:8px; cursor:pointer; font-size:10px; letter-spacing:2px; transition:all 0.2s; }
+.close-btn:hover { border-color:#555; color:#888; }
+#screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.94); z-index:100; }
+#screen h1 { font-size:42px; font-weight:800; letter-spacing:4px; margin-bottom:8px; }
+#screen.win h1 { color:#4edb8d; text-shadow:0 0 40px rgba(78,219,141,0.4); }
+#screen.levelwin h1 { color:#ffd93d; text-shadow:0 0 40px rgba(255,217,61,0.35); }
+#screen.lose h1 { color:#e05f5f; }
+#screen p { color:#666; font-size:12px; letter-spacing:2px; margin-bottom:7px; }
+.reward { color:#ffd93d !important; font-size:14px !important; margin-bottom:20px !important; }
+.screen-btns { display:flex; gap:10px; margin-top:4px; }
+#screen button { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.16); color:#fff; padding:10px 28px; border-radius:10px; cursor:pointer; font-size:11px; letter-spacing:3px; transition:all 0.2s; }
+#screen button:hover { background:rgba(255,255,255,0.13); }
+#toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%); padding:7px 18px; border-radius:8px; font-size:11px; letter-spacing:1px; z-index:200; display:none; pointer-events:none; white-space:nowrap; border:1px solid #e05f5f; color:#e05f5f; background:rgba(0,0,0,0.8); }
+canvas { display:block; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div class="stat">
+    <div class="stat-label">Level</div>
+    <div class="stat-value" id="stat-level">1</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Step</div>
+    <div id="step-wrap">
+      <div class="stat-value" id="stat-step">0 / 10</div>
+      <button id="secret-btn" onclick="secretMoney()" title=" "> </button>
+    </div>
+  </div>
+  <div class="stat" style="cursor:pointer" onclick="openShop()">
+    <div class="stat-label">Coins</div>
+    <div class="stat-value" id="stat-coins">30</div>
+  </div>
+</div>
+
+<canvas id="cvs"></canvas>
+
+<div id="hint-box">💡 <span id="hint-text"></span></div>
+
+<div id="controls">
+  <button class="ctrl-btn" id="btn-reveal" onclick="useReveal()">🔮 Reveal <span id="reveal-tag">(not owned)</span></button>
+  <button class="ctrl-btn" id="btn-carpet" onclick="useCarpet()">🪄 Carpet <span id="carpet-tag">(not owned)</span></button>
+  <button class="ctrl-btn" onclick="openShop()">🛒 Shop</button>
+</div>
+
+<div id="shop-overlay">
+  <div id="shop-panel">
+    <h2>SHOP</h2>
+    <p class="shop-sub">1 coin = ₹0.10 &nbsp;·&nbsp; Each item is single-use per run. Re-buy to refresh.</p>
+    <div class="shop-item">
+      <div class="shop-item-info">
+        <h3>🪄 Flying Carpet</h3>
+        <p>Skip the next 5 panels. One use — re-buy to get another.</p>
+      </div>
+      <div style="display:flex;align-items:center">
+        <span class="shop-price">80 🪙</span>
+        <button class="buy-btn" id="buy-carpet" onclick="buyItem('carpet')">BUY</button>
+      </div>
+    </div>
+    <div class="shop-item">
+      <div class="shop-item-info">
+        <h3>🔮 Glass Revealer</h3>
+        <p>Shows safe glass at current step. One use — re-buy to refresh.</p>
+      </div>
+      <div style="display:flex;align-items:center">
+        <span class="shop-price">50 🪙</span>
+        <button class="buy-btn" id="buy-reveal" onclick="buyItem('reveal')">BUY</button>
+      </div>
+    </div>
+    <div class="shop-item">
+      <div class="shop-item-info">
+        <h3>💰 +30 Coins</h3>
+        <p>Simulated purchase (₹3.00)</p>
+      </div>
+      <div style="display:flex;align-items:center">
+        <span class="shop-price">₹3.00</span>
+        <button class="buy-btn" onclick="buyCoins()">BUY</button>
+      </div>
+    </div>
+    <button class="close-btn" onclick="closeShop()">CLOSE</button>
+  </div>
+</div>
+
+<div id="screen">
+  <h1 id="screen-title">LEVEL CLEAR</h1>
+  <p id="screen-sub">ADVANCING TO NEXT LEVEL</p>
+  <p class="reward" id="screen-reward"></p>
+  <div class="screen-btns">
+    <button id="btn-next" onclick="nextLevel()">NEXT LEVEL</button>
+    <button id="btn-restart" onclick="restartGame()" style="display:none">PLAY AGAIN</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var cvs = document.getElementById('cvs');
+var ctx = cvs.getContext('2d');
+
+var MAX_LEVEL   = 10;
+var CARPET_SKIP = 5;
+var HINT_EVERY  = 5;
+
+var W, H;
+function resize() {
+  W = cvs.width  = window.innerWidth;
+  H = cvs.height = window.innerHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+
+function stepsForLevel(lv) { return 11 - lv; } // lv1=10, lv2=9 … lv10=1
+
+var currentLevel = 1;
+var totalSteps   = 10;
+var safeSide     = [];
+var playerStep   = 0;
+var playerSide   = 0;
+var coins        = 30;
+var gameOver     = false;
+var gameWon      = false;
+var hasCarpet    = false;
+var hasReveal    = false;
+var carpetUsed   = false;
+var revealUsed   = false;
+var revealActive = false;
+var revealStepIdx = -1;
+var carpetUsedSteps = {};
+var fallAnim     = null;
+var particles    = [];
+var glassShatter = null;
+var carpetGlide  = null;
+var animFrame    = null;
+
+function initLevel(lv) {
+  currentLevel   = lv;
+  totalSteps     = stepsForLevel(lv);
+  safeSide       = [];
+  for (var i = 0; i < totalSteps; i++) safeSide.push(Math.random() < 0.5 ? 0 : 1);
+  playerStep      = 0;
+  playerSide      = 0;
+  gameOver        = false;
+  gameWon         = false;
+  revealActive    = false;
+  revealStepIdx   = -1;
+  carpetUsedSteps = {};
+  fallAnim        = null;
+  particles       = [];
+  glassShatter    = null;
+  carpetGlide     = null;
+  updateUI();
+  showHint();
+  draw();
+}
+
+function reshuffleAndRetry() {
+  for (var i = 0; i < totalSteps; i++) safeSide[i] = Math.random() < 0.5 ? 0 : 1;
+  playerStep      = 0;
+  playerSide      = 0;
+  gameOver        = false;
+  revealActive    = false;
+  revealStepIdx   = -1;
+  carpetUsedSteps = {};
+  fallAnim        = null;
+  particles       = [];
+  glassShatter    = null;
+  carpetGlide     = null;
+  updateUI();
+  showHint();
+  showShuffleFlash();
+  draw();
+}
+
+function updateUI() {
+  document.getElementById('stat-level').textContent = currentLevel;
+  document.getElementById('stat-step').textContent  = playerStep + ' / ' + totalSteps;
+  document.getElementById('stat-coins').textContent = coins;
+
+  var btnC = document.getElementById('btn-carpet');
+  var tagC = document.getElementById('carpet-tag');
+  if (!hasCarpet)      { btnC.disabled=true;  btnC.classList.remove('used'); tagC.textContent='(not owned)'; }
+  else if (carpetUsed) { btnC.disabled=true;  btnC.classList.add('used');    tagC.textContent='(used)'; }
+  else                 { btnC.disabled=false; btnC.classList.remove('used'); tagC.textContent='(skip 5)'; }
+
+  var btnR = document.getElementById('btn-reveal');
+  var tagR = document.getElementById('reveal-tag');
+  if (!hasReveal)      { btnR.disabled=true;  btnR.classList.remove('used'); tagR.textContent='(not owned)'; }
+  else if (revealUsed) { btnR.disabled=true;  btnR.classList.add('used');    tagR.textContent='(used)'; }
+  else                 { btnR.disabled=false; btnR.classList.remove('used'); tagR.textContent='(1 use)'; }
+
+  document.getElementById('buy-carpet').disabled = coins < 80;
+  document.getElementById('buy-reveal').disabled = coins < 50;
+}
+
+function showHint() {
+  var hintBox = document.getElementById('hint-box');
+  if (playerStep > 0 && playerStep % HINT_EVERY === 0 && playerStep < totalSteps) {
+    var side = safeSide[playerStep] === 0 ? 'LEFT' : 'RIGHT';
+    document.getElementById('hint-text').textContent = 'HINT: Safe side is ' + side;
+    hintBox.style.display = 'block';
+    setTimeout(function() { hintBox.style.display = 'none'; }, 3500);
+  } else {
+    hintBox.style.display = 'none';
+  }
+}
+
+function toast(msg, col) {
+  col = col || '#e05f5f';
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  t.style.color = col; t.style.borderColor = col;
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function() { t.style.display = 'none'; }, 2200);
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────────
+// Camera: always show the FULL bridge centered vertically on screen.
+// panelH + gap are chosen so all steps fit between topMargin and bottomMargin.
+
+var TOP_MARGIN    = 70;   // below HUD
+var BOTTOM_MARGIN = 70;   // above controls
+
+function getPL() {
+  var usableH  = H - TOP_MARGIN - BOTTOM_MARGIN;
+  // slots = totalSteps panels + 1 start platform + 1 finish platform
+  var slots    = totalSteps + 2;
+  var cellH    = usableH / slots;
+  var panelH   = Math.min(cellH * 0.62, 52);
+  var gap      = cellH - panelH;
+  var panelW   = Math.min(W * 0.18, 118);
+  var centerX  = W / 2;
+  var leftX    = centerX - panelW - 10;
+  var rightX   = centerX + 10;
+  // baseY = y of step 0 panel (bottom of bridge area)
+  var baseY    = H - BOTTOM_MARGIN - cellH * 0.5;
+  return { panelW:panelW, panelH:panelH, gap:gap, cellH:cellH,
+           centerX:centerX, leftX:leftX, rightX:rightX, baseY:baseY };
+}
+
+function sY(s, L) {
+  // step 0 is at baseY, higher steps go upward
+  return L.baseY - s * L.cellH;
+}
+
+function rr(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.arcTo(x+w,y,x+w,y+r,r);
+  c.lineTo(x+w,y+h-r); c.arcTo(x+w,y+h,x+w-r,y+h,r);
+  c.lineTo(x+r,y+h); c.arcTo(x,y+h,x,y+h-r,r);
+  c.lineTo(x,y+r); c.arcTo(x,y,x+r,y,r);
+  c.closePath();
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0a0a0f'; ctx.fillRect(0,0,W,H);
+
+  // subtle grid
+  for (var gi=0;gi<7;gi++) {
+    ctx.strokeStyle='rgba(255,255,255,0.01)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(gi*(W/6),0); ctx.lineTo(gi*(W/6),H); ctx.stroke();
+  }
+
+  var L = getPL();
+
+  // rails
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(L.leftX-16, TOP_MARGIN); ctx.lineTo(L.leftX-16, H-BOTTOM_MARGIN); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L.rightX+L.panelW+20, TOP_MARGIN); ctx.lineTo(L.rightX+L.panelW+20, H-BOTTOM_MARGIN); ctx.stroke();
+
+  // START platform
+  var startY = sY(-1, L);
+  ctx.fillStyle='rgba(255,255,255,0.038)';
+  rr(ctx, L.leftX-8, startY, L.panelW*2+28, L.panelH*0.6, 5); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.22)'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+  ctx.fillText('START', L.centerX+5, startY + L.panelH*0.38);
+
+  // FINISH platform
+  var finY = sY(totalSteps, L);
+  ctx.fillStyle='rgba(78,219,141,0.07)';
+  rr(ctx, L.leftX-8, finY, L.panelW*2+28, L.panelH*0.65, 5); ctx.fill();
+  ctx.strokeStyle='rgba(78,219,141,0.2)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle='rgba(78,219,141,0.5)'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+  ctx.fillText('FINISH', L.centerX+5, finY + L.panelH*0.45);
+
+  // PANELS
+  for (var s=0; s<totalSteps; s++) {
+    var py = sY(s, L);
+    var isPast    = s < playerStep;
+    var isCurrent = s === playerStep;
+    var isSafe0   = safeSide[s] === 0;
+    var skipped   = !!carpetUsedSteps[s];
+    var showRev   = revealActive && revealStepIdx === s;
+
+    for (var side=0; side<2; side++) {
+      var px2   = side===0 ? L.leftX : L.rightX;
+      var isSafe = (side===0) ? isSafe0 : !isSafe0;
+      var fill, stroke, glow=null, al=1;
+
+      if (skipped) {
+        fill='rgba(50,50,70,0.22)'; stroke='rgba(255,255,255,0.04)'; al=0.4;
+      } else if (isPast) {
+        fill   = isSafe ? 'rgba(78,219,141,0.2)'  : 'rgba(224,95,95,0.16)';
+        stroke = isSafe ? 'rgba(78,219,141,0.38)' : 'rgba(224,95,95,0.28)';
+      } else if (showRev && isSafe) {
+        fill='rgba(167,139,250,0.28)'; stroke='#a78bfa'; glow='#a78bfa';
+      } else if (isCurrent) {
+        fill='rgba(74,143,192,0.2)'; stroke='rgba(74,143,192,0.6)'; glow='#4a8fc0';
+      } else {
+        fill='rgba(24,24,38,0.9)'; stroke='rgba(255,255,255,0.05)';
+      }
+
+      ctx.globalAlpha=al;
+      if (glow) { ctx.shadowColor=glow; ctx.shadowBlur=13; }
+      rr(ctx, px2, py, L.panelW, L.panelH, 5);
+      ctx.fillStyle=fill; ctx.fill();
+      ctx.strokeStyle=stroke; ctx.lineWidth=isCurrent?1.4:0.7; ctx.stroke();
+
+      if (!skipped && !isPast) {
+        ctx.fillStyle='rgba(255,255,255,0.03)';
+        rr(ctx, px2+3, py+3, L.panelW-6, L.panelH*0.32, 3); ctx.fill();
+      }
+      ctx.shadowBlur=0; ctx.globalAlpha=1;
+    }
+
+    // step number
+    ctx.fillStyle = isCurrent ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)';
+    ctx.font='9px monospace'; ctx.textAlign='right';
+    ctx.fillText(s+1, L.leftX-20, py+L.panelH/2+3);
+
+    // connector
+    if (!skipped) {
+      ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=0.8;
+      ctx.beginPath();
+      ctx.moveTo(L.leftX+L.panelW, py+L.panelH/2);
+      ctx.lineTo(L.rightX,         py+L.panelH/2);
+      ctx.stroke();
+    }
+  }
+
+  // PLAYER
+  if (!gameOver || fallAnim) {
+    var py3 = sY(playerStep-1, L) + L.panelH/2;
+    var ppx = playerSide===0 ? L.leftX+L.panelW/2 : L.rightX+L.panelW/2;
+
+    if (carpetGlide) {
+      carpetGlide.progress = Math.min(1, carpetGlide.progress + 0.03);
+      var fy2 = sY(carpetGlide.fromStep-1,L) + L.panelH/2;
+      var ty2 = sY(carpetGlide.toStep-1,L)   + L.panelH/2;
+      py3 = fy2 + (ty2-fy2)*carpetGlide.progress;
+      if (carpetGlide.progress>=1) carpetGlide=null;
+    }
+    if (fallAnim) {
+      fallAnim.vy+=0.75; fallAnim.y+=fallAnim.vy; fallAnim.alpha-=0.024;
+      py3=fallAnim.y;
+      if (fallAnim.alpha<=0) fallAnim=null;
+    }
+
+    if (!fallAnim || fallAnim.alpha>0) {
+      var fa = fallAnim ? Math.max(0,fallAnim.alpha) : 1;
+      ctx.globalAlpha = fa;
+      if (hasCarpet && carpetGlide) {
+        ctx.shadowColor='#a78bfa'; ctx.shadowBlur=20;
+        ctx.fillStyle='#a78bfa';
+        rr(ctx, ppx-26, py3+6, 52, 8, 4); ctx.fill();
+        ctx.shadowBlur=0;
+      }
+      ctx.shadowColor='#ffd93d'; ctx.shadowBlur=16;
+      ctx.fillStyle='#ffd93d';
+      ctx.beginPath(); ctx.arc(ppx, py3-1, 11, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#0a0a0f';
+      ctx.beginPath();
+      ctx.arc(ppx-3, py3-4, 2, 0, Math.PI*2);
+      ctx.arc(ppx+3, py3-4, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // PARTICLES
+  particles = particles.filter(function(p){ return p.life>0; });
+  for (var pi=0;pi<particles.length;pi++) {
+    var p=particles[pi];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.18; p.life-=3;
+    ctx.globalAlpha=Math.max(0,p.life/100);
+    ctx.fillStyle=p.color; ctx.fillRect(p.x,p.y,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+
+  // SHATTER
+  if (glassShatter) {
+    glassShatter.progress+=0.055;
+    if (glassShatter.progress>1) { glassShatter=null; }
+    else {
+      var ga2=1-glassShatter.progress;
+      ctx.strokeStyle='rgba(224,95,95,'+(ga2*0.65)+')'; ctx.lineWidth=1;
+      for (var ri=0;ri<10;ri++) {
+        var ra=(ri/10)*Math.PI*2, rr2=glassShatter.progress*65;
+        ctx.beginPath();
+        ctx.moveTo(glassShatter.x+Math.cos(ra)*7, glassShatter.y+Math.sin(ra)*7);
+        ctx.lineTo(glassShatter.x+Math.cos(ra)*rr2, glassShatter.y+Math.sin(ra)*rr2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // level progress dots at top
+  ctx.textAlign='center';
+  var dotSpacing = 16, dotTotal = MAX_LEVEL;
+  var dotStartX = W/2 - (dotTotal-1)*dotSpacing/2;
+  for (var d=0;d<MAX_LEVEL;d++) {
+    var lv = d+1;
+    ctx.beginPath();
+    ctx.arc(dotStartX + d*dotSpacing, TOP_MARGIN - 12, 3, 0, Math.PI*2);
+    if (lv < currentLevel)      ctx.fillStyle='rgba(78,219,141,0.7)';
+    else if (lv === currentLevel) ctx.fillStyle='#ffd93d';
+    else                         ctx.fillStyle='rgba(255,255,255,0.15)';
+    ctx.fill();
+  }
+
+  if (carpetGlide||(fallAnim&&fallAnim.alpha>0)||particles.length>0||glassShatter) {
+    animFrame=requestAnimationFrame(draw);
+  }
+}
+
+function spawn(x,y,col,n) {
+  for (var i=0;i<n;i++) {
+    particles.push({x:x,y:y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*5-2,life:80+Math.random()*40,size:2+Math.random()*3,color:col});
+  }
+}
+
+// ── Game logic ────────────────────────────────────────────────────────────────
+
+function step(side) {
+  if (gameOver||gameWon) return;
+  var L=getPL();
+  playerSide=side;
+  var safe=safeSide[playerStep]===side;
+  var py4=sY(playerStep-1,L)+L.panelH/2;
+  var px4=side===0?L.leftX+L.panelW/2:L.rightX+L.panelW/2;
+
+  if (safe) {
+    playerStep++; coins++;
+    spawn(px4,py4,'#4edb8d',10);
+    if (playerStep>=totalSteps) {
+      gameWon=true;
+      var bonus=10+currentLevel*2;
+      coins+=bonus; updateUI(); draw();
+      setTimeout(function(){ showScreen(currentLevel>=MAX_LEVEL?'win':'levelwin', bonus); }, 600);
+      return;
+    }
+    revealActive=false; updateUI(); showHint(); draw();
+  } else {
+    gameOver=true;
+    glassShatter={x:px4,y:py4,progress:0};
+    spawn(px4,py4,'#e05f5f',30);
+    fallAnim={y:py4,vy:2,alpha:1};
+    cancelAnimationFrame(animFrame);
+    animFrame=requestAnimationFrame(draw);
+    setTimeout(reshuffleAndRetry, 1650);
+  }
+}
+
+function useCarpet() {
+  if (!hasCarpet)  { toast('Buy Flying Carpet first!','#a78bfa'); return; }
+  if (carpetUsed)  { toast('Carpet already used!','#e05f5f'); return; }
+  if (gameOver||gameWon) return;
+  carpetUsed=true;
+  var from=playerStep;
+  var to=Math.min(playerStep+CARPET_SKIP, totalSteps);
+  for (var s=from;s<to;s++) carpetUsedSteps[s]=true;
+  playerStep=to;
+  carpetGlide={fromStep:from, toStep:to, progress:0};
+  if (playerStep>=totalSteps) {
+    gameWon=true; var b2=10+currentLevel*2; coins+=b2; updateUI();
+    setTimeout(function(){ showScreen(currentLevel>=MAX_LEVEL?'win':'levelwin',b2); },1100);
+    return;
+  }
+  revealActive=false;
+  toast('🪄 5 panels skipped!','#a78bfa');
+  updateUI(); showHint();
+  cancelAnimationFrame(animFrame);
+  animFrame=requestAnimationFrame(draw);
+}
+
+function useReveal() {
+  if (!hasReveal) { toast('Buy Glass Revealer first!','#a78bfa'); return; }
+  if (revealUsed) { toast('Revealer already used!','#e05f5f'); return; }
+  if (gameOver||gameWon) return;
+  revealUsed=true; revealActive=true; revealStepIdx=playerStep;
+  toast('🔮 Safe glass revealed!','#a78bfa');
+  updateUI(); draw();
+  setTimeout(function(){ revealActive=false; draw(); }, 5000);
+}
+
+function buyItem(type) {
+  if (type==='carpet') {
+    if (coins<80) { toast('Not enough coins!'); return; }
+    coins-=80; hasCarpet=true; carpetUsed=false;
+    toast('🪄 Flying Carpet acquired!','#a78bfa');
+  } else if (type==='reveal') {
+    if (coins<50) { toast('Not enough coins!'); return; }
+    coins-=50; hasReveal=true; revealUsed=false;
+    toast('🔮 Glass Revealer acquired!','#a78bfa');
+  }
+  updateUI();
+}
+
+function secretMoney() {
+  coins+=100000; updateUI();
+  toast('💀','#1a1a1a');
+}
+
+function buyCoins() {
+  coins+=30; toast('+30 coins! (₹3.00 simulated)','#ffd93d'); updateUI();
+}
+
+function openShop()  { document.getElementById('shop-overlay').classList.add('open'); updateUI(); }
+function closeShop() { document.getElementById('shop-overlay').classList.remove('open'); }
+
+function showScreen(type, bonus) {
+  var el=document.getElementById('screen');
+  el.style.display='flex'; el.className=type;
+  var nextBtn    = document.getElementById('btn-next');
+  var restartBtn = document.getElementById('btn-restart');
+  var rew        = document.getElementById('screen-reward');
+
+  if (type==='win') {
+    document.getElementById('screen-title').textContent='ALL LEVELS CLEAR';
+    document.getElementById('screen-sub').textContent='YOU CONQUERED THE BRIDGE';
+    rew.textContent='+'+bonus+' 🪙 TOTAL BONUS'; rew.style.display='block';
+    nextBtn.style.display='none'; restartBtn.style.display='inline-block';
+  } else if (type==='levelwin') {
+    document.getElementById('screen-title').textContent='LEVEL '+ currentLevel +' CLEAR';
+    document.getElementById('screen-sub').textContent='NEXT LEVEL HAS '+(totalSteps-1)+' STEPS';
+    rew.textContent='+'+bonus+' 🪙 BONUS'; rew.style.display='block';
+    nextBtn.style.display='inline-block'; restartBtn.style.display='none';
+  }
+}
+
+function nextLevel() {
+  document.getElementById('screen').style.display='none';
+  // Items carry over, used state resets for new level
+  carpetUsed=false; revealUsed=false;
+  initLevel(currentLevel+1);
+}
+
+function restartGame() {
+  document.getElementById('screen').style.display='none';
+  hasCarpet=false; hasReveal=false; carpetUsed=false; revealUsed=false; coins=30;
+  initLevel(1);
+}
+
+function showShuffleFlash() {
+  var el=document.createElement('div');
+  el.textContent='⚠ PANELS RESHUFFLED';
+  el.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(224,95,95,0.11);border:1px solid #e05f5f;color:#e05f5f;padding:12px 28px;border-radius:12px;font-size:13px;font-weight:700;letter-spacing:3px;z-index:300;pointer-events:none;text-align:center;animation:sfade 1.8s ease forwards';
+  if (!document.getElementById('sfade-style')) {
+    var s=document.createElement('style'); s.id='sfade-style';
+    s.textContent='@keyframes sfade{0%{opacity:0;transform:translate(-50%,-50%) scale(0.85)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(el);
+  setTimeout(function(){el.remove();},1900);
+}
+
+document.addEventListener('keydown',function(e){
+  if (e.key==='ArrowLeft' ||e.key==='a'||e.key==='A') step(0);
+  if (e.key==='ArrowRight'||e.key==='d'||e.key==='D') step(1);
+  if (e.key==='c'||e.key==='C') useCarpet();
+  if (e.key==='r'||e.key==='R') useReveal();
+});
+cvs.addEventListener('click',function(e){
+  if (gameOver||gameWon) return;
+  if (e.clientX<W/2) step(0); else step(1);
+});
+
+resize();
+initLevel(1);
+</script>
+</body>
+</html>
